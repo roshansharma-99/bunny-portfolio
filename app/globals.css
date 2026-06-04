@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #030014;
+  --foreground: #ededed;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #030014;
+    color: #ffffff;
+    font-family: Arial, Helvetica, sans-serif;
+    /* Allows smooth scrolling without letting layout elements freeze the viewport */
+    overflow-x: hidden; 
+    scroll-behavior: smooth;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Ensure the Canvas behaves like a background layer */
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
+}
+
+@layer utilities {
+  .fluid-text {
+    background: linear-gradient(120deg, rgba(255,255,255,1) 20%, rgba(232,121,249,1) 50%, rgba(255,255,255,1) 80%);
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: fluid-flow 4s infinite linear;
+  }
+}
+
+@keyframes fluid-flow {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
 }
