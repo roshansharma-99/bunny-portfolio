@@ -21,9 +21,12 @@ interface AudioContextType {
   isUnmuted: boolean;
   isPlaying: boolean;
   currentPlaying: AudioKey | null;
+  currentAudio: string | null;
+  progress: number;
   playAudio: (key: AudioKey) => void;
   stopAudio: () => void;
   unmuteAndStart: () => void;
+  toggleMute: () => void;
   playedKeys: Set<AudioKey>;
 }
 
@@ -33,9 +36,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isUnmuted, setIsUnmuted] = useState(false);
   const [currentPlaying, setCurrentPlaying] = useState<AudioKey | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [playedKeys, setPlayedKeys] = useState<Set<AudioKey>>(new Set());
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   
+  const currentAudio = currentPlaying ? AUDIO_FILES[currentPlaying] : null;
+
   useEffect(() => {
     setIsPlaying(currentPlaying !== null);
   }, [currentPlaying]);
@@ -73,6 +79,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       activeAudioRef.current = null;
       setCurrentPlaying(null);
     }
+    setProgress(0);
   };
 
   const playAudio = (key: AudioKey) => {
@@ -95,17 +102,38 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const audio = new Audio(src);
     activeAudioRef.current = audio;
     setCurrentPlaying(key);
+    setProgress(0);
+
+    // Sync muted state
+    audio.muted = !isUnmutedRef.current;
 
     setPlayedKeys((prev) => {
       const next = new Set(prev);
       next.add(key);
       return next;
     });
+    let lastProgress = 0;
+    audio.addEventListener("timeupdate", () => {
+      if (activeAudioRef.current === audio) {
+        const dur = audio.duration;
+        const cur = audio.currentTime;
+        if (dur && !isNaN(dur)) {
+          const nextProgress = (cur / dur) * 100;
+          if (Math.abs(nextProgress - lastProgress) >= 0.5 || nextProgress === 0 || nextProgress >= 100) {
+            setProgress(nextProgress);
+            lastProgress = nextProgress;
+          }
+        } else {
+          setProgress(0);
+        }
+      }
+    });
 
     audio.addEventListener("ended", () => {
       if (activeAudioRef.current === audio) {
         activeAudioRef.current = null;
         setCurrentPlaying(null);
+        setProgress(0);
       }
       console.log(`[Audio Engine]: Finished playing key "${key}"`);
       if (key === "intro") {
@@ -119,6 +147,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       if (activeAudioRef.current === audio) {
         activeAudioRef.current = null;
         setCurrentPlaying(null);
+        setProgress(0);
       }
     });
 
@@ -133,15 +162,29 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     playAudio("intro");
   };
 
+  const toggleMute = () => {
+    setIsUnmuted((prev) => {
+      const next = !prev;
+      isUnmutedRef.current = next;
+      if (activeAudioRef.current) {
+        activeAudioRef.current.muted = !next;
+      }
+      return next;
+    });
+  };
+
   return (
     <AudioContext.Provider
       value={{
         isUnmuted,
         isPlaying,
         currentPlaying,
+        currentAudio,
+        progress,
         playAudio,
         stopAudio,
         unmuteAndStart,
+        toggleMute,
         playedKeys,
       }}
     >

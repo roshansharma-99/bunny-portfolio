@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAudio } from "@/hooks/useAudio";
 
 interface Message {
   sender: "user" | "bot";
@@ -15,6 +16,7 @@ interface BunnyAIChatProps {
 }
 
 export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
+  const { isUnmuted, toggleMute } = useAudio();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
@@ -588,7 +590,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
               </div>
 
               {/* Controls */}
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3 sm:space-x-4">
                 {/* Voice Mode Toggle Switch */}
                 <button
                   onClick={handleVoiceToggle}
@@ -605,6 +607,23 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
                     <line x1="12" x2="12" y1="19" y2="22"/>
                   </svg>
                   <span>Voice Assistance</span>
+                </button>
+
+                {/* Mirrored Global Mute Toggle Button */}
+                <button
+                  onClick={toggleMute}
+                  className={`p-2 rounded-lg border transition-all duration-300 cursor-pointer ${
+                    isUnmuted 
+                      ? "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:text-white" 
+                      : "bg-zinc-900 border-zinc-700 text-zinc-500 hover:text-zinc-300"
+                  }`}
+                  title={isUnmuted ? "Mute Guide Narration" : "Unmute Guide Narration"}
+                >
+                  {isUnmuted ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                  )}
                 </button>
 
                 {/* Full Screen Expand Button */}

@@ -116,7 +116,7 @@ function TypewriterText({ text, start, speed = 40, isLiquid = false }: { text: s
 }
 
 function HomeContent() {
-  const { playAudio, unmuteAndStart, isPlaying, currentPlaying } = useAudio();
+  const { playAudio, unmuteAndStart, isPlaying, currentPlaying, progress, isUnmuted, toggleMute } = useAudio();
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showUnmuteOverlay, setShowUnmuteOverlay] = useState(false);
@@ -374,19 +374,19 @@ function HomeContent() {
       {/* Premium Fixed Floating Glass Capsule Navigation Bar */}
       <nav className="fixed top-0 left-0 w-full z-50 px-6 py-4 transition-all duration-300">
         <div className="max-w-6xl mx-auto flex items-center justify-between bg-[#030014]/40 backdrop-blur-md border border-white/10 px-6 py-2.5 rounded-full shadow-lg">
-          {/* Left Sleek Interactive Logo */}
-          <div className="flex items-center space-x-4">
+          {/* Left Sleek Interactive Logo & Compact Audio Controls */}
+          <div className="flex items-center space-x-3 max-w-[65%] md:max-w-none">
             <span 
               onClick={() => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 playAudio("easterEgg");
               }} 
-              className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent hover:from-purple-400 hover:to-indigo-400 transition-all duration-500 cursor-pointer"
+              className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent hover:from-purple-400 hover:to-indigo-400 transition-all duration-500 cursor-pointer shrink-0"
             >
               Roshan Sharma
             </span>
             {/* Dynamic Voice Pulse Indicator */}
-            <div className="flex items-end space-x-1 h-4 select-none" title="Voice Guide Representative Pulse">
+            <div className="flex items-end space-x-1 h-4 select-none shrink-0" title="Voice Guide Representative Pulse">
               {[0, 1, 2, 3, 4].map((bar) => (
                 <motion.div
                   key={bar}
@@ -401,6 +401,32 @@ function HomeContent() {
                 />
               ))}
             </div>
+            
+            {/* Compact Audio Progress & Mute button */}
+            {isStarted && (
+              <div className="flex items-center space-x-2 pl-2 border-l border-white/10 shrink-0">
+                {/* Progress bar container */}
+                <div className="w-12 sm:w-16 md:w-24 h-0.5 bg-white/10 rounded-full relative overflow-hidden shrink-0">
+                  <motion.div 
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-indigo-500 rounded-full shadow-[0_0_6px_rgba(168,85,247,0.8)]"
+                    animate={{ width: `${progress}%` }}
+                    transition={{ ease: "easeOut", duration: 0.15 }}
+                  />
+                </div>
+                {/* Mute button */}
+                <button 
+                  onClick={toggleMute}
+                  className="p-1 text-zinc-400 hover:text-white rounded-full hover:bg-white/5 transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0"
+                  title={isUnmuted ? "Mute Guide" : "Unmute Guide"}
+                >
+                  {isUnmuted ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-400"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Right Desktop Links */}
