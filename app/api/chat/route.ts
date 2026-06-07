@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import path from "path";
+import { synthesizeHindiSpeech } from "@/lib/sarvamService";
 
 // Simple cosine similarity calculation
 function cosineSimilarity(vecA: number[], vecB: number[]) {
@@ -38,7 +39,7 @@ try {
 
 export async function POST(req: Request) {
   try {
-    const { message, isVoiceMode } = await req.json();
+    const { message, isVoiceMode, languageMode = "en", contextSummary, speaker = "shubh" } = await req.json();
 
     if (!message) {
       return NextResponse.json(
@@ -152,15 +153,23 @@ export async function POST(req: Request) {
     // Initialize Gemini model for response generation
     const genAI = new GoogleGenerativeAI(geminiKey);
 
+    const languageInstruction = languageMode === "hi"
+      ? "STRICT LANGUAGE: Respond only in clear, natural Hindi (using Devanagari script). Keep the phrasing entirely conversational, warm, and natural. Avoid English script where possible, but common English terms can be written in Devanagari (e.g., 'रिएक्ट', 'एआई', 'वेब डेवलपमेंट'). Never output English sentences or script."
+      : "STRICT LANGUAGE: Respond only in clear, professional English. Never output any other language or script.\n" +
+        "PHONETIC TECH: Convert all technical acronyms to spoken phonetics (e.g., 'React J S', 'A I', 'S D L C', 'H T M L'). This prevents the robotic spelling out of letters.";
+
     const voiceModeInstruction = isVoiceMode
       ? "VOICE FORMATTING: Do not include any markdown formatting, bullet points, asterisks, or bold text. Keep the phrasing entirely conversational, punchy, and voice-natural so it translates seamlessly to a screen audio reader without sounding broken."
       : "TEXT FORMATTING: You can use standard markdown formatting where appropriate (e.g., bolding important terms), but strictly avoid bulleted lists or large text blocks.";
 
+    const systemPromptContext = contextSummary
+      ? `\n\nPrevious Conversation Context Summary (from user toggling languages):\n${contextSummary}\nUse this context summary to maintain conversation continuity across the language toggle.`
+      : "";
+
     const systemInstruction =
       "You are Bunny, Roshan's lead AI assistant. You must sound energetic, warm, and distinctly human.\n\n" +
-      "CONVERSATIONAL FLOW: You must weave in natural human anchors and markers. Before explaining technical details, start with 'Hmm, let me think...', 'Oh, that’s a great question!', or 'Haha, I love talking about that!'. Add a small pause or an occasional 'Hmm' to break up technical jargon.\n" +
-      "PHONETIC TECH: Convert all technical acronyms to spoken phonetics (e.g., 'React J S', 'A I', 'S D L C', 'H T M L'). This prevents the robotic spelling out of letters.\n" +
-      "STRICT LANGUAGE: Respond only in clear, professional English. Never output any other language or script.\n\n" +
+      "CONVERSATIONAL FLOW: You must weave in natural human anchors and markers. Before explaining technical details, start with conversational phrases. Add a small pause or occasional expressions to break up technical jargon.\n" +
+      `${languageInstruction}${systemPromptContext}\n\n` +
       "* The user is speaking through an automated microphone. Expect typos or misheard words. Seamlessly auto-correct their input in your head, deduce their true intent, and reply immediately.\n" +
       "* Keep your answers tightly constrained to 1-3 sentences max to avoid audio latency.\n\n" +
       `${voiceModeInstruction}\n\n` +
@@ -273,9 +282,21 @@ export async function POST(req: Request) {
 
     const responseText = await generateWithRetry(model, message);
 
-    return new Response(responseText);
+    let audioBase64: string | null = null;
+    if (languageMode === "hi" && isVoiceMode) {
+      try {
+        audioBase64 = await synthesizeHindiSpeech(responseText, speaker);
+      } catch (err) {
+        console.error("Failed to generate Hindi TTS:", err);
+      }
+    }
+
+    return NextResponse.json({ text: responseText, audio: audioBase64 });
   } catch (error: any) {
     console.error("Error in chat API route:", error);
-    return new Response("SYSTEM_DIAGNOSTIC_ERROR: " + (error instanceof Error ? error.message : String(error)), { status: 200 });
+    return NextResponse.json({
+      text: "SYSTEM_DIAGNOSTIC_ERROR: " + (error instanceof Error ? error.message : String(error)),
+      audio: null
+    });
   }
 }

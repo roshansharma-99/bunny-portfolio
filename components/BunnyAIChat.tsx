@@ -16,15 +16,38 @@ interface BunnyAIChatProps {
 }
 
 export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
-  const { isUnmuted, toggleMute } = useAudio();
+  const { isUnmuted, toggleMute, stopAudio } = useAudio();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [languageMode, setLanguageMode] = useState<"en" | "hi">("en");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [contextSummary, setContextSummary] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [speaker, setSpeaker] = useState<"shubh" | "priya">("shubh");
+  const speakerRef = useRef<"shubh" | "priya">("shubh");
+
+  useEffect(() => {
+    speakerRef.current = speaker;
+  }, [speaker]);
+
+  useEffect(() => {
+    const savedSpeaker = localStorage.getItem("bunny_ai_speaker");
+    if (savedSpeaker === "shubh" || savedSpeaker === "priya") {
+      setSpeaker(savedSpeaker);
+      speakerRef.current = savedSpeaker;
+    }
+  }, []);
+
+  const handleSpeakerChange = (val: "shubh" | "priya") => {
+    setSpeaker(val);
+    localStorage.setItem("bunny_ai_speaker", val);
+  };
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isAwakening, setIsAwakening] = useState(false);
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const sarvamAudioRef = useRef<HTMLAudioElement | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const isSelfStartingMicRef = useRef(false);
   const [interimTranscript, setInterimTranscript] = useState("");
@@ -34,6 +57,22 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   const hasSentSummaryRef = useRef(false);
   const isAiSpeakingRef = useRef(false);
   const speechStartTimestampRef = useRef<number>(0);
+
+  const languageModeRef = useRef<"en" | "hi">("en");
+  useEffect(() => {
+    languageModeRef.current = languageMode;
+  }, [languageMode]);
+
+  const contextSummaryRef = useRef<string | null>(null);
+  useEffect(() => {
+    contextSummaryRef.current = contextSummary;
+  }, [contextSummary]);
+
+  const EN_GREETING = "Hey! How are you? I'm Roshan's Voice AI Agent. He is an exceptional Full-Stack Developer and AI Product Builder specialized in React and autonomous agent frameworks. May I know a bit about you and what role you're looking to fill today?";
+  const EN_STATIC_GREETING = "Hello! I am Bunny, Roshan's autonomous AI assistant. 🌟 Ask me about his projects, skills, or get a quick 60s pitch on his full-stack & AI engineering capabilities!";
+
+  const HI_GREETING = "नमस्ते! आप कैसे हैं? मैं रोशन का वॉइस एआई एजेंट हूँ। वे एक बेहतरीन फुल-स्टैक डेवलपर और एआई प्रोडक्ट बिल्डर हैं। क्या मैं आपके बारे में जान सकती हूँ और आप आज किस भूमिका के लिए देख रहे हैं?";
+  const HI_STATIC_GREETING = "नमस्ते! मैं बन्नी हूँ, रोशन का ऑटोनॉमस एआई असिस्टेंट। 🌟 आप मुझसे उनके प्रोजेक्ट्स, स्किल्स के बारे में पूछ सकते हैं या उनके बारे में जानकारी प्राप्त कर सकते हैं!";
 
   // Keep isAiSpeakingRef updated to prevent stale closures
   useEffect(() => {
@@ -193,6 +232,13 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     };
   }, []);
 
+  // Update speech recognition language dynamically when languageMode toggles
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = languageMode === "hi" ? "hi-IN" : "en-US";
+    }
+  }, [languageMode]);
+
   // Manage Speech Recognition lifecycle: abort if panel is closed, voice mode is off, AI is speaking, or typing
   useEffect(() => {
     if (!recognitionRef.current) return;
@@ -211,8 +257,168 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     }
   }, [isOpen, isVoiceMode, isAiSpeaking, isTyping]);
 
+  const playSarvamAudio = (base64Audio: string) => {
+    // Decouple engines completely: abort recognition immediately before any speech output
+    if (recognitionRef.current) {
+      if (micStateRef.current === "starting" || micStateRef.current === "listening") {
+        try {
+          micStateRef.current = "stopping";
+          recognitionRef.current.abort();
+        } catch (abortErr) {}
+      }
+    }
+
+    // Cancel any ongoing English speech safely
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+
+    // Stop previous Sarvam audio playback
+    if (sarvamAudioRef.current) {
+      try {
+        sarvamAudioRef.current.pause();
+      } catch (e) {}
+      sarvamAudioRef.current = null;
+    }
+
+    setIsAiSpeaking(true);
+    speechStartTimestampRef.current = Date.now();
+
+    const audio = new Audio("data:audio/wav;base64," + base64Audio);
+    sarvamAudioRef.current = audio;
+
+    audio.onended = () => {
+      setIsAiSpeaking(false);
+      sarvamAudioRef.current = null;
+
+      // Turn-taking triggers recognition start
+      if (isOpenRef.current && isVoiceModeRef.current && !isTypingRef.current) {
+        if (recognitionRef.current && micStateRef.current === "off") {
+          try {
+            micStateRef.current = "starting";
+            recognitionRef.current.start();
+          } catch (e) {
+            micStateRef.current = "off";
+          }
+        }
+      }
+    };
+
+    audio.onerror = (e) => {
+      console.error("Sarvam Audio playback error:", e);
+      setIsAiSpeaking(false);
+      sarvamAudioRef.current = null;
+
+      if (isOpenRef.current && isVoiceModeRef.current && !isTypingRef.current) {
+        if (recognitionRef.current && micStateRef.current === "off") {
+          try {
+            micStateRef.current = "starting";
+            recognitionRef.current.start();
+          } catch (err) {
+            micStateRef.current = "off";
+          }
+        }
+      }
+    };
+
+    audio.play().catch((err) => {
+      console.warn("Playback blocked by browser policy:", err);
+      setIsAiSpeaking(false);
+      sarvamAudioRef.current = null;
+    });
+  };
+
+  const speakHindi = (text: string) => {
+    // Decouple engines completely: abort recognition immediately before any speech output
+    if (recognitionRef.current) {
+      if (micStateRef.current === "starting" || micStateRef.current === "listening") {
+        try {
+          micStateRef.current = "stopping";
+          recognitionRef.current.abort();
+        } catch (abortErr) {}
+      }
+    }
+
+    // Cancel any ongoing English speech safely
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+
+    // Stop previous Sarvam audio playback
+    if (sarvamAudioRef.current) {
+      try {
+        sarvamAudioRef.current.pause();
+      } catch (e) {}
+      sarvamAudioRef.current = null;
+    }
+
+    // Block from executing audio unless voice assistance mode is active
+    if (!isVoiceModeRef.current) {
+      console.warn("Vocal output blocked because voice assistance mode is inactive.");
+      return;
+    }
+
+    setIsAiSpeaking(true);
+    speechStartTimestampRef.current = Date.now();
+
+    const cleanText = text.replace(/🎙️|🌟|⚡|🛠️|📅|⚠️/g, "").replace(/[\*\#\_]/g, "").trim();
+    const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&speaker=${speakerRef.current}`;
+    
+    const audio = new Audio(audioUrl);
+    sarvamAudioRef.current = audio;
+
+    audio.onended = () => {
+      setIsAiSpeaking(false);
+      sarvamAudioRef.current = null;
+
+      // Turn-taking triggers recognition start
+      if (isOpenRef.current && isVoiceModeRef.current && !isTypingRef.current) {
+        if (recognitionRef.current && micStateRef.current === "off") {
+          try {
+            micStateRef.current = "starting";
+            recognitionRef.current.start();
+          } catch (e) {
+            micStateRef.current = "off";
+          }
+        }
+      }
+    };
+
+    audio.onerror = (e) => {
+      console.error("Sarvam streaming Audio playback error:", e);
+      setIsAiSpeaking(false);
+      sarvamAudioRef.current = null;
+
+      if (isOpenRef.current && isVoiceModeRef.current && !isTypingRef.current) {
+        if (recognitionRef.current && micStateRef.current === "off") {
+          try {
+            micStateRef.current = "starting";
+            recognitionRef.current.start();
+          } catch (err) {
+            micStateRef.current = "off";
+          }
+        }
+      }
+    };
+
+    audio.play().catch((err) => {
+      console.warn("Playback blocked by browser policy:", err);
+      setIsAiSpeaking(false);
+      sarvamAudioRef.current = null;
+    });
+  };
+
   // Helper function to speak text out loud safely
   const speakText = (text: string) => {
+    if (languageModeRef.current === "hi") {
+      speakHindi(text);
+      return;
+    }
+
     if (typeof window === "undefined" || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
       console.warn("Speech synthesis not supported or ready.");
       return;
@@ -318,6 +524,21 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     setIsVoiceMode(nextMode);
     isVoiceModeRef.current = nextMode; // Sync synchronously to allow immediate greeting audio
 
+    // Stop all audio on mode toggle
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+    if (sarvamAudioRef.current) {
+      try {
+        sarvamAudioRef.current.pause();
+      } catch (e) {}
+      sarvamAudioRef.current = null;
+    }
+    stopAudio();
+    setIsAiSpeaking(false);
+
     if (nextMode) {
       // Request mic permission to trigger browser popup prompt
       if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -329,7 +550,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         }
       }
 
-      const greeting = "Hey! How are you? I'm Roshan's Voice AI Agent. He is an exceptional Full-Stack Developer and AI Product Builder specialized in React and autonomous agent frameworks. May I know a bit about you and what role you're looking to fill today?";
+      const greeting = languageMode === "hi" ? HI_GREETING : EN_GREETING;
       setMessages([
         {
           sender: "bot",
@@ -339,19 +560,119 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       ]);
       speakText(greeting);
     } else {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch (e) {}
-      }
-      setIsAiSpeaking(false);
       setMessages([
         {
           sender: "bot",
-          text: "Hello! I am Bunny, Roshan's autonomous AI assistant. 🌟 Ask me about his projects, skills, or get a quick 60s pitch on his full-stack & AI engineering capabilities!",
+          text: languageMode === "hi" ? HI_STATIC_GREETING : EN_STATIC_GREETING,
           timestamp: new Date(),
         },
       ]);
+    }
+  };
+
+  // Handle language toggle (with memory isolation, email summaries, audio cancellation)
+  const handleLanguageToggle = async () => {
+    const nextLang = languageMode === "en" ? "hi" : "en";
+
+    // 1. Immediately cancel all audio output
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) {}
+    }
+    if (sarvamAudioRef.current) {
+      try {
+        sarvamAudioRef.current.pause();
+      } catch (e) {}
+      sarvamAudioRef.current = null;
+    }
+    stopAudio();
+    setIsAiSpeaking(false);
+
+    // 2. Before toggling the language, trigger a summary function of the last 5 messages
+    let newSummary = null;
+    const currentMsgs = messagesRef.current;
+    if (currentMsgs.length > 0) {
+      setIsSummarizing(true);
+      try {
+        const last5Msgs = currentMsgs.slice(-5);
+        const summaryResponse = await fetch("/api/summarize-context", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: last5Msgs.map((m) => ({
+              sender: m.sender,
+              text: m.text,
+            })),
+          }),
+        });
+        if (summaryResponse.ok) {
+          const data = await summaryResponse.json();
+          newSummary = data.summary;
+          setContextSummary(newSummary);
+          contextSummaryRef.current = newSummary;
+        }
+      } catch (err) {
+        console.error("Context summarization failed:", err);
+      } finally {
+        setIsSummarizing(false);
+      }
+    }
+
+    // 3. Dispatch email summary of current chat history if there is any conversation
+    if (currentMsgs.length > 1) {
+      sendChatSummary(currentMsgs);
+    }
+
+    // 4. Update state
+    setLanguageMode(nextLang);
+    languageModeRef.current = nextLang;
+
+    // 5. Reset chat context
+    setMessages([]);
+    hasSentSummaryRef.current = false;
+
+    // 6. Seed greetings matching new language mode
+    if (nextLang === "hi") {
+      if (isVoiceMode) {
+        setMessages([
+          {
+            sender: "bot",
+            text: `🎙️ ${HI_GREETING}`,
+            timestamp: new Date(),
+          },
+        ]);
+        speakHindi(HI_GREETING);
+      } else {
+        setMessages([
+          {
+            sender: "bot",
+            text: HI_STATIC_GREETING,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } else {
+      if (isVoiceMode) {
+        setMessages([
+          {
+            sender: "bot",
+            text: `🎙️ ${EN_GREETING}`,
+            timestamp: new Date(),
+          },
+        ]);
+        speakText(EN_GREETING);
+      } else {
+        setMessages([
+          {
+            sender: "bot",
+            text: EN_STATIC_GREETING,
+            timestamp: new Date(),
+          },
+        ]);
+      }
     }
   };
 
@@ -395,6 +716,12 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
           window.speechSynthesis.cancel();
         } catch (e) {}
       }
+      if (sarvamAudioRef.current) {
+        try {
+          sarvamAudioRef.current.pause();
+        } catch (e) {}
+        sarvamAudioRef.current = null;
+      }
       const finalMsgs = messagesRef.current;
       if (finalMsgs.length > 1) {
         sendChatSummary(finalMsgs);
@@ -408,6 +735,12 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         try {
           window.speechSynthesis.cancel();
         } catch (e) {}
+      }
+      if (sarvamAudioRef.current) {
+        try {
+          sarvamAudioRef.current.pause();
+        } catch (e) {}
+        sarvamAudioRef.current = null;
       }
       setIsAiSpeaking(false);
       
@@ -438,7 +771,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       hasSentSummaryRef.current = false; // Reset the summary flag for the new session
       if (isVoiceMode) {
         isVoiceModeRef.current = true; // Sync ref synchronously to allow immediate greeting audio
-        const greeting = "Hey! How are you? I'm Roshan's Voice AI Agent. He is an exceptional Full-Stack Developer and AI Product Builder specialized in React and autonomous agent frameworks. May I know a bit about you and what role you're looking to fill today?";
+        const greeting = languageMode === "hi" ? HI_GREETING : EN_GREETING;
         setMessages([
           {
             sender: "bot",
@@ -451,13 +784,13 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         setMessages([
           {
             sender: "bot",
-            text: "Hello! I am Bunny, Roshan's autonomous AI assistant. 🌟 Ask me about his projects, skills, or get a quick 60s pitch on his full-stack & AI engineering capabilities!",
+            text: languageMode === "hi" ? HI_STATIC_GREETING : EN_STATIC_GREETING,
             timestamp: new Date(),
           },
         ]);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, languageMode]);
 
   // Scroll to bottom when message arrives
   useEffect(() => {
@@ -486,6 +819,9 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         body: JSON.stringify({
           message: text,
           isVoiceMode: isVoiceMode,
+          languageMode: languageMode,
+          contextSummary: contextSummary,
+          speaker: speaker,
         }),
       });
 
@@ -493,7 +829,9 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         throw new Error("Failed to receive response from Bunny AI.");
       }
 
-      const responseText = await response.text();
+      const responseData = await response.json();
+      const responseText = responseData.text || "";
+      const audioBase64 = responseData.audio;
 
       // Push the response from the backend directly as a single message bubble
       setMessages((prev) => [
@@ -506,7 +844,15 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       ]);
 
       if (isVoiceMode) {
-        speakText(responseText);
+        if (languageMode === "hi") {
+          if (audioBase64) {
+            playSarvamAudio(audioBase64);
+          } else {
+            speakHindi(responseText);
+          }
+        } else {
+          speakText(responseText);
+        }
       }
     } catch (error) {
       console.error("Error sending message to Bunny AI:", error);
@@ -527,6 +873,12 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         } catch (audioErr) {
           console.warn("speechSynthesis.cancel failed:", audioErr);
         }
+      }
+      if (sarvamAudioRef.current) {
+        try {
+          sarvamAudioRef.current.pause();
+        } catch (audioErr) {}
+        sarvamAudioRef.current = null;
       }
       setIsAiSpeaking(false);
 
@@ -569,6 +921,8 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
             transition={{ type: "spring", damping: 26, stiffness: 220 }}
             className={`fixed top-0 right-0 h-full w-full bg-zinc-950/90 backdrop-blur-xl border-l z-50 flex flex-col pointer-events-auto transition-all duration-500 ${
               isFullScreen ? "inset-0 max-w-full" : "max-w-md"
+            } ${
+              languageMode === "hi" ? "theme-hindi" : ""
             } ${
               isAwakening
                 ? "animate-pulse shadow-[0_0_50px_rgba(168,85,247,0.6)] border-purple-400"
@@ -660,6 +1014,49 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
                   </svg>
                 </button>
               </div>
+            </div>
+
+            {/* Interior Chat Settings Bar (Responsive Mobile/Desktop Layout) */}
+            <div className="mx-6 mt-4 p-3 bg-zinc-900/40 border border-zinc-800/60 rounded-xl flex flex-wrap gap-3 items-center justify-between backdrop-blur-md select-none shrink-0 z-10">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-sans">Lang</span>
+                <button
+                  onClick={handleLanguageToggle}
+                  disabled={isSummarizing}
+                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold uppercase tracking-wider transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                    languageMode === "hi"
+                      ? "bg-amber-600/20 border-amber-500/50 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.15)]"
+                      : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                  }`}
+                  title="Switch Language Mode"
+                >
+                  <span>🌐</span>
+                  <span>{isSummarizing ? "Saving..." : languageMode === "en" ? "English" : "Hindi (हिंदी)"}</span>
+                </button>
+                {isSummarizing && (
+                  <span className="text-[10px] text-amber-400 animate-pulse font-medium font-sans">Loading...</span>
+                )}
+              </div>
+
+              {/* Voice Selection Dropdown */}
+              {languageMode === "hi" && (
+                <div className="relative flex items-center">
+                  <select
+                    value={speaker}
+                    onChange={(e) => handleSpeakerChange(e.target.value as "shubh" | "priya")}
+                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider hover:border-amber-500/50 hover:text-white transition-all cursor-pointer outline-none appearance-none pr-7 font-sans"
+                    title="Select Hindi Voice Speaker"
+                  >
+                    <option value="shubh">🗣️ Shubh (M)</option>
+                    <option value="priya">🗣️ Priya (F)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-zinc-500">
+                    <svg className="w-3 h-3 fill-current" viewBox="0 0 20 20">
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Chat Body */}
