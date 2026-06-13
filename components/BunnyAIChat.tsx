@@ -18,7 +18,7 @@ interface BunnyAIChatProps {
 export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   const { isUnmuted, toggleMute, stopAudio } = useAudio();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  const [languageMode, setLanguageMode] = useState<"en" | "hi">("en");
+  const [languageMode, setLanguageMode] = useState<"en" | "hi" | "regional">("en");
   const [messages, setMessages] = useState<Message[]>([]);
   const [contextSummary, setContextSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -34,6 +34,11 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     if (savedSpeaker === "shubh" || savedSpeaker === "priya") {
       setSpeaker(savedSpeaker);
       speakerRef.current = savedSpeaker;
+    }
+    const savedLang = localStorage.getItem("bunny_chat_language");
+    if (savedLang === "hi" || savedLang === "regional" || savedLang === "en") {
+      setLanguageMode(savedLang);
+      languageModeRef.current = savedLang;
     }
   }, []);
 
@@ -58,7 +63,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   const isAiSpeakingRef = useRef(false);
   const speechStartTimestampRef = useRef<number>(0);
 
-  const languageModeRef = useRef<"en" | "hi">("en");
+  const languageModeRef = useRef<"en" | "hi" | "regional">("en");
   useEffect(() => {
     languageModeRef.current = languageMode;
   }, [languageMode]);
@@ -71,8 +76,11 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   const EN_GREETING = "Hey! How are you? I'm Roshan's Voice AI Agent. He is an exceptional Full-Stack Developer and AI Product Builder specialized in React and autonomous agent frameworks. May I know a bit about you and what role you're looking to fill today?";
   const EN_STATIC_GREETING = "Hello! I am Bunny, Roshan's autonomous AI assistant. 🌟 Ask me about his projects, skills, or get a quick 60s pitch on his full-stack & AI engineering capabilities!";
 
-  const HI_GREETING = "नमस्ते! आप कैसे हैं? मैं रोशन का वॉइस एआई एजेंट हूँ। वे एक बेहतरीन फुल-स्टैक डेवलपर और एआई प्रोडक्ट बिल्डर हैं। क्या मैं आपके बारे में जान सकती हूँ और आप आज किस भूमिका के लिए देख रहे हैं?";
+  const HI_GREETING = "नमस्ते! आप कैसे हैं? मैं रोशन का वॉइस एआई एजेंट हूँ। वे एक बेहतरीन फुल-ஸ்டாக் डेवलपर और एआई प्रोडक्ट बिल्डर हैं। क्या मैं आपके बारे में जान सकती हूँ और आप आज किस भूमिका के लिए देख रहे हैं?";
   const HI_STATIC_GREETING = "नमस्ते! मैं बन्नी हूँ, रोशन का ऑटोनॉमस एआई असिस्टेंट। 🌟 आप मुझसे उनके प्रोजेक्ट्स, स्किल्स के बारे में पूछ सकते हैं या उनके बारे में जानकारी प्राप्त कर सकते हैं!";
+
+  const REGIONAL_GREETING = "வணக்கம்! நீங்கள் எப்படி இருக்கிறீர்கள்? நான் ரோஷனின் குரல் ஏஐ முகவர். அவர் ஒரு சிறந்த முழு-அடுக்கு டெவலப்பர் மற்றும் ஏஐ தயாரிப்பு உருவாக்குபவர். உங்களைப் பற்றி நான் தெரிந்துகொள்ளலாமா?";
+  const REGIONAL_STATIC_GREETING = "வணக்கம்! நான் பன்னி, ரோஷனின் ஏஐ உதவியாளர். 🌟 ரோஷனின் திட்டங்கள் மற்றும் திறன்களைப் பற்றி நீங்கள் என்னிடம் கேட்கலாம்!";
 
   // Keep isAiSpeakingRef updated to prevent stale closures
   useEffect(() => {
@@ -235,7 +243,13 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   // Update speech recognition language dynamically when languageMode toggles
   useEffect(() => {
     if (recognitionRef.current) {
-      recognitionRef.current.lang = languageMode === "hi" ? "hi-IN" : "en-US";
+      if (languageMode === "hi") {
+        recognitionRef.current.lang = "hi-IN";
+      } else if (languageMode === "regional") {
+        recognitionRef.current.lang = "ta-IN";
+      } else {
+        recognitionRef.current.lang = "en-US";
+      }
     }
   }, [languageMode]);
 
@@ -330,7 +344,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     });
   };
 
-  const speakHindi = (text: string) => {
+  const speakSarvam = (text: string, lang = "hi") => {
     // Decouple engines completely: abort recognition immediately before any speech output
     if (recognitionRef.current) {
       if (micStateRef.current === "starting" || micStateRef.current === "listening") {
@@ -366,7 +380,8 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     speechStartTimestampRef.current = Date.now();
 
     const cleanText = text.replace(/🎙️|🌟|⚡|🛠️|📅|⚠️/g, "").replace(/[\*\#\_]/g, "").trim();
-    const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&speaker=${speakerRef.current}`;
+    const langCode = lang === "regional" ? "ta-IN" : "hi-IN";
+    const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&speaker=${speakerRef.current}&languageCode=${langCode}`;
     
     const audio = new Audio(audioUrl);
     sarvamAudioRef.current = audio;
@@ -414,8 +429,8 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
 
   // Helper function to speak text out loud safely
   const speakText = (text: string) => {
-    if (languageModeRef.current === "hi") {
-      speakHindi(text);
+    if (languageModeRef.current === "hi" || languageModeRef.current === "regional") {
+      speakSarvam(text, languageModeRef.current);
       return;
     }
 
@@ -571,9 +586,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   };
 
   // Handle language toggle (with memory isolation, email summaries, audio cancellation)
-  const handleLanguageToggle = async () => {
-    const nextLang = languageMode === "en" ? "hi" : "en";
-
+  const handleLanguageChange = async (nextLang: "en" | "hi" | "regional") => {
     // 1. Immediately cancel all audio output
     if (typeof window !== "undefined" && window.speechSynthesis) {
       try {
@@ -589,7 +602,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     stopAudio();
     setIsAiSpeaking(false);
 
-    // 2. Before toggling the language, trigger a summary function of the last 5 messages
+    // 2. Before changing the language, trigger a summary function of the last 5 messages
     let newSummary = null;
     const currentMsgs = messagesRef.current;
     if (currentMsgs.length > 0) {
@@ -626,9 +639,12 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       sendChatSummary(currentMsgs);
     }
 
-    // 4. Update state
+    // 4. Update state and localStorage
     setLanguageMode(nextLang);
     languageModeRef.current = nextLang;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bunny_chat_language", nextLang);
+    }
 
     // 5. Reset chat context
     setMessages([]);
@@ -644,12 +660,31 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
             timestamp: new Date(),
           },
         ]);
-        speakHindi(HI_GREETING);
+        speakSarvam(HI_GREETING, "hi");
       } else {
         setMessages([
           {
             sender: "bot",
             text: HI_STATIC_GREETING,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } else if (nextLang === "regional") {
+      if (isVoiceMode) {
+        setMessages([
+          {
+            sender: "bot",
+            text: `🎙️ ${REGIONAL_GREETING}`,
+            timestamp: new Date(),
+          },
+        ]);
+        speakSarvam(REGIONAL_GREETING, "regional");
+      } else {
+        setMessages([
+          {
+            sender: "bot",
+            text: REGIONAL_STATIC_GREETING,
             timestamp: new Date(),
           },
         ]);
@@ -771,7 +806,11 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       hasSentSummaryRef.current = false; // Reset the summary flag for the new session
       if (isVoiceMode) {
         isVoiceModeRef.current = true; // Sync ref synchronously to allow immediate greeting audio
-        const greeting = languageMode === "hi" ? HI_GREETING : EN_GREETING;
+        const greeting = languageMode === "hi" 
+          ? HI_GREETING 
+          : languageMode === "regional" 
+            ? REGIONAL_GREETING 
+            : EN_GREETING;
         setMessages([
           {
             sender: "bot",
@@ -784,7 +823,11 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
         setMessages([
           {
             sender: "bot",
-            text: languageMode === "hi" ? HI_STATIC_GREETING : EN_STATIC_GREETING,
+            text: languageMode === "hi" 
+              ? HI_STATIC_GREETING 
+              : languageMode === "regional" 
+                ? REGIONAL_STATIC_GREETING 
+                : EN_STATIC_GREETING,
             timestamp: new Date(),
           },
         ]);
@@ -826,6 +869,15 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       });
 
       if (!response.ok) {
+        // Try parsing JSON error response from backend if possible
+        try {
+          const errData = await response.json();
+          if (errData && errData.text) {
+            throw new Error(errData.text);
+          }
+        } catch (jsonErr) {
+          // ignore parsing error and let generic handler throw
+        }
         throw new Error("Failed to receive response from Bunny AI.");
       }
 
@@ -844,19 +896,27 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
       ]);
 
       if (isVoiceMode) {
-        if (languageMode === "hi") {
+        if (languageMode === "hi" || languageMode === "regional") {
           if (audioBase64) {
             playSarvamAudio(audioBase64);
           } else {
-            speakHindi(responseText);
+            speakSarvam(responseText, languageMode);
           }
         } else {
           speakText(responseText);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message to Bunny AI:", error);
-      const errText = "Connection error. Bunny's neuro-link was interrupted. Please check your network or try again.";
+      
+      // Default to the friendly conversational fallback message
+      let errText = "Bunny is catching its breath! Please wait a moment and try again in a minute.";
+      
+      // If error message contains the friendly phrase, use it directly (e.g. from backend)
+      if (error && error.message && error.message.includes("catching its breath")) {
+        errText = error.message;
+      }
+      
       setMessages((prev) => [
         ...prev,
         {
@@ -922,7 +982,7 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
             className={`fixed top-0 right-0 h-full w-full bg-zinc-950/90 backdrop-blur-xl border-l z-50 flex flex-col pointer-events-auto transition-all duration-500 ${
               isFullScreen ? "inset-0 max-w-full" : "max-w-md"
             } ${
-              languageMode === "hi" ? "theme-hindi" : ""
+              (languageMode === "hi" || languageMode === "regional") ? "theme-hindi" : ""
             } ${
               isAwakening
                 ? "animate-pulse shadow-[0_0_50px_rgba(168,85,247,0.6)] border-purple-400"
@@ -1020,32 +1080,43 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
             <div className="mx-6 mt-4 p-3 bg-zinc-900/40 border border-zinc-800/60 rounded-xl flex flex-wrap gap-3 items-center justify-between backdrop-blur-md select-none shrink-0 z-10">
               <div className="flex items-center space-x-2">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-sans">Lang</span>
-                <button
-                  onClick={handleLanguageToggle}
-                  disabled={isSummarizing}
-                  className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold uppercase tracking-wider transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                    languageMode === "hi"
-                      ? "bg-amber-600/20 border-amber-500/50 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.15)]"
-                      : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700"
-                  }`}
-                  title="Switch Language Mode"
-                >
-                  <span>🌐</span>
-                  <span>{isSummarizing ? "Saving..." : languageMode === "en" ? "English" : "Hindi (हिंदी)"}</span>
-                </button>
+                <div className="relative flex items-center">
+                  <select
+                    value={languageMode}
+                    disabled={isSummarizing}
+                    onChange={(e) => handleLanguageChange(e.target.value as "en" | "hi" | "regional")}
+                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider hover:border-amber-500/50 hover:text-white transition-all cursor-pointer outline-none appearance-none pr-7 font-sans disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Select Language"
+                  >
+                    <option value="en">🌐 English</option>
+                    <option value="hi">🌐 Hindi (हिंदी)</option>
+                    <option value="regional">🌐 Regional (தமிழ்)</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-zinc-500">
+                    <svg className="w-3 h-3 fill-current" viewBox="0 0 20 20">
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
                 {isSummarizing && (
-                  <span className="text-[10px] text-amber-400 animate-pulse font-medium font-sans">Loading...</span>
+                  <span className="text-[10px] text-amber-400 animate-pulse font-medium font-sans flex items-center space-x-1 ml-1">
+                    <svg className="animate-spin h-3 w-3 text-amber-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Loading...</span>
+                  </span>
                 )}
               </div>
 
               {/* Voice Selection Dropdown */}
-              {languageMode === "hi" && (
+              {(languageMode === "hi" || languageMode === "regional") && (
                 <div className="relative flex items-center">
                   <select
                     value={speaker}
                     onChange={(e) => handleSpeakerChange(e.target.value as "shubh" | "priya")}
-                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 px-2.5 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wider hover:border-amber-500/50 hover:text-white transition-all cursor-pointer outline-none appearance-none pr-7 font-sans"
-                    title="Select Hindi Voice Speaker"
+                    className="bg-zinc-950 border border-zinc-800 text-zinc-300 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider hover:border-amber-500/50 hover:text-white transition-all cursor-pointer outline-none appearance-none pr-7 font-sans"
+                    title="Select Voice Speaker"
                   >
                     <option value="shubh">🗣️ Shubh (M)</option>
                     <option value="priya">🗣️ Priya (F)</option>

@@ -1,9 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #030014;
-  --foreground: #ededed;
-}
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
   html, body {
@@ -15,6 +14,15 @@
     /* Allows smooth scrolling without letting layout elements freeze the viewport */
     overflow-x: hidden; 
     scroll-behavior: smooth;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
@@ -44,11 +52,12 @@ canvas {
   100% { background-position: -200% center; }
 }
 
-/* Indian-inspired premium theme background and glow adjustments for Hindi mode */
 .theme-hindi {
   background: radial-gradient(circle at top right, rgba(255, 153, 51, 0.18), transparent 70%),
               radial-gradient(circle at bottom left, rgba(19, 136, 8, 0.15), transparent 70%),
-              linear-gradient(to bottom, #0c0702, #030014) !important;
+              url('/india_map_bg.png') no-repeat center center / contain,
+              linear-gradient(to bottom, rgba(12, 7, 2, 0.95), rgba(3, 0, 20, 0.95)) !important;
+  background-blend-mode: overlay;
   border-left: 1px solid rgba(255, 153, 51, 0.4) !important;
   box-shadow: 0 0 50px rgba(255, 153, 51, 0.2), 0 0 100px rgba(19, 136, 8, 0.05) !important;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -113,4 +122,132 @@ canvas {
   box-shadow: 0 4px 15px rgba(245, 158, 11, 0.05) !important;
 }
 
+/* Sticky offsets for mobile stacking groups, clearing the fixed navbar */
+.sticky-top-4 {
+  top: calc(1rem + 5.5rem) !important;
+}
+.sticky-top-12 {
+  top: calc(3rem + 5.5rem) !important;
+}
+.sticky-top-20 {
+  top: calc(5rem + 5.5rem) !important;
+}
+.sticky-top-28 {
+  top: calc(7rem + 5.5rem) !important;
+}
+.sticky-top-36 {
+  top: calc(9rem + 5.5rem) !important;
+}
+.sticky-top-44 {
+  top: calc(11rem + 5.5rem) !important;
+}
+.sticky-top-52 {
+  top: calc(13rem + 5.5rem) !important;
+}
 
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #030014;
+  --foreground: #ededed;
+  --card: #0d0a16;
+  --card-foreground: #ededed;
+  --popover: #0d0a16;
+  --popover-foreground: #ededed;
+  --primary: #c084fc;
+  --primary-foreground: #030014;
+  --secondary: #1e1b4b;
+  --secondary-foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: #a1a1aa;
+  --accent: #1e1b4b;
+  --accent-foreground: #ffffff;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #a855f7;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: #0d0a16;
+  --sidebar-foreground: #ededed;
+  --sidebar-primary: #c084fc;
+  --sidebar-primary-foreground: #030014;
+  --sidebar-accent: #1e1b4b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #a855f7;
+}
+
+.dark {
+  --background: #030014;
+  --foreground: #ededed;
+  --card: #0d0a16;
+  --card-foreground: #ededed;
+  --popover: #0d0a16;
+  --popover-foreground: #ededed;
+  --primary: #c084fc;
+  --primary-foreground: #030014;
+  --secondary: #1e1b4b;
+  --secondary-foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: #a1a1aa;
+  --accent: #1e1b4b;
+  --accent-foreground: #ffffff;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #a855f7;
+  --sidebar: #0d0a16;
+  --sidebar-foreground: #ededed;
+  --sidebar-primary: #c084fc;
+  --sidebar-primary-foreground: #030014;
+  --sidebar-accent: #1e1b4b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #a855f7;
+}

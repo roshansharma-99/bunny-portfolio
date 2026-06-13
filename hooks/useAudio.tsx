@@ -28,6 +28,7 @@ interface AudioContextType {
   unmuteAndStart: () => void;
   toggleMute: () => void;
   playedKeys: Set<AudioKey>;
+  activeAudioRef: React.MutableRefObject<HTMLAudioElement | null>;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -186,6 +187,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         unmuteAndStart,
         toggleMute,
         playedKeys,
+        activeAudioRef,
       }}
     >
       {children}

@@ -78,12 +78,12 @@ export default function FuelTheCode() {
   };
 
   return (
-    <section className="relative w-full py-24 px-8 md:px-24 bg-transparent overflow-hidden border-t border-violet-500/10 fuel-section">
-      {/* Subtle background glow */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[20%] right-[10%] w-[400px] h-[400px] rounded-full bg-purple-600/5 blur-[120px] transform-gpu" />
-        <div className="absolute bottom-[20%] left-[10%] w-[400px] h-[400px] rounded-full bg-indigo-500/5 blur-[120px] transform-gpu" />
-      </div>
+    <section 
+      className="relative overflow-hidden w-full py-20 bg-[#0f0926] px-8 md:px-24 border-t border-violet-500/10 fuel-section"
+      style={{ backgroundImage: 'url("/backgroundss.png")', backgroundSize: 'cover', backgroundPosition: 'center' }}
+    >
+      {/* Crisp High-tech Grid overlay with radial center fade */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none z-0" />
 
       <div className="relative z-10 w-full max-w-6xl mx-auto">
         {/* Section Header */}
@@ -108,11 +108,7 @@ export default function FuelTheCode() {
                 setSelectedTier(tier);
                 playAudio("payment");
               }}
-              className={`bg-[#0d0a16] border rounded-3xl p-8 flex flex-col justify-between relative overflow-hidden cursor-pointer group shadow-2xl transition-all duration-300 ${
-                tier.popular 
-                  ? "border-purple-500/40 shadow-[0_0_30px_rgba(139,92,246,0.15)] bg-gradient-to-b from-[#0d0a16] to-[#120d20]" 
-                  : "border-violet-500/10 hover:border-violet-500/30"
-              }`}
+              className="bg-neutral-950/60 backdrop-blur-md border border-purple-500/20 rounded-2xl p-6 relative z-10 transition-all duration-300 hover:border-purple-500/40 shadow-xl flex flex-col justify-between overflow-hidden cursor-pointer group"
             >
               {/* Popular Badge */}
               {tier.popular && (

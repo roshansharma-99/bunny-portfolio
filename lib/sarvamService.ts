@@ -60,7 +60,7 @@ class SarvamService {
   /**
    * Synthesize text to base64 audio (REST endpoint)
    */
-  public async synthesize(text: string, speaker = "shubh"): Promise<string> {
+  public async synthesize(text: string, speaker = "shubh", languageCode = "hi-IN"): Promise<string> {
     const response = await this.safeFetch("https://api.sarvam.ai/text-to-speech", {
       method: "POST",
       headers: {
@@ -69,7 +69,7 @@ class SarvamService {
       body: JSON.stringify({
         text,
         model: "bulbul:v3",
-        target_language_code: "hi-IN",
+        target_language_code: languageCode,
         speaker,
         speech_sample_rate: 24000,
         output_audio_codec: "wav"
@@ -92,7 +92,7 @@ class SarvamService {
   /**
    * Request a binary stream from Sarvam's stream endpoint
    */
-  public async streamTTS(text: string, speaker = "shubh"): Promise<Response> {
+  public async streamTTS(text: string, speaker = "shubh", languageCode = "hi-IN"): Promise<Response> {
     const response = await this.safeFetch("https://api.sarvam.ai/text-to-speech/stream", {
       method: "POST",
       headers: {
@@ -101,7 +101,7 @@ class SarvamService {
       body: JSON.stringify({
         text,
         model: "bulbul:v3",
-        target_language_code: "hi-IN",
+        target_language_code: languageCode,
         speaker,
         speech_sample_rate: 24000,
         output_audio_codec: "wav"
@@ -121,6 +121,6 @@ class SarvamService {
 export const sarvamService = new SarvamService();
 
 // Standalone wrapper for backward-compatibility
-export async function synthesizeHindiSpeech(text: string, speaker = "shubh"): Promise<string> {
-  return sarvamService.synthesize(text, speaker);
+export async function synthesizeHindiSpeech(text: string, speaker = "shubh", languageCode = "hi-IN"): Promise<string> {
+  return sarvamService.synthesize(text, speaker, languageCode);
 }

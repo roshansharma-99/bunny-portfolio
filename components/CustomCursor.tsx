@@ -24,6 +24,8 @@ export default function CustomCursor() {
     const yTo = gsap.quickTo(ring, "y", { duration: 0.15, ease: "power3.out" });
 
     const onMouseMove = (e: MouseEvent) => {
+      if (typeof window !== "undefined" && window.innerWidth < 1024) return;
+      if (window.matchMedia("(pointer: coarse)").matches) return;
       setDotX(e.clientX);
       setDotY(e.clientY);
       xTo(e.clientX);
@@ -63,7 +65,7 @@ export default function CustomCursor() {
   }, []);
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[9999] mix-blend-difference overflow-hidden">
+    <div className="hidden lg:block pointer-events-none fixed inset-0 z-[9999] mix-blend-difference overflow-hidden">
       <div ref={cursorDot} className="absolute left-0 top-0 w-1 h-1 bg-white rounded-full will-change-transform" />
       <div ref={cursorRing} className="absolute left-0 top-0 w-[30px] h-[30px] border border-white rounded-full will-change-transform" />
     </div>

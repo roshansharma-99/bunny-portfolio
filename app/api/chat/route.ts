@@ -153,10 +153,15 @@ export async function POST(req: Request) {
     // Initialize Gemini model for response generation
     const genAI = new GoogleGenerativeAI(geminiKey);
 
-    const languageInstruction = languageMode === "hi"
-      ? "STRICT LANGUAGE: Respond only in clear, natural Hindi (using Devanagari script). Keep the phrasing entirely conversational, warm, and natural. Avoid English script where possible, but common English terms can be written in Devanagari (e.g., 'रिएक्ट', 'एआई', 'वेब डेवलपमेंट'). Never output English sentences or script."
-      : "STRICT LANGUAGE: Respond only in clear, professional English. Never output any other language or script.\n" +
+    let languageInstruction = "";
+    if (languageMode === "hi") {
+      languageInstruction = "STRICT LANGUAGE: Respond only in clear, natural Hindi (using Devanagari script). Keep the phrasing entirely conversational, warm, and natural. Avoid English script where possible, but common English terms can be written in Devanagari (e.g., 'रिएक्ट', 'एआई', 'वेब डेवलपमेंट'). Never output English sentences or script.";
+    } else if (languageMode === "regional") {
+      languageInstruction = "STRICT LANGUAGE: Respond only in clear, natural Tamil (using Tamil script). Keep the phrasing entirely conversational, warm, and natural. Never output English sentences or script.";
+    } else {
+      languageInstruction = "STRICT LANGUAGE: Respond only in clear, professional English. Never output any other language or script.\n" +
         "PHONETIC TECH: Convert all technical acronyms to spoken phonetics (e.g., 'React J S', 'A I', 'S D L C', 'H T M L'). This prevents the robotic spelling out of letters.";
+    }
 
     const voiceModeInstruction = isVoiceMode
       ? "VOICE FORMATTING: Do not include any markdown formatting, bullet points, asterisks, or bold text. Keep the phrasing entirely conversational, punchy, and voice-natural so it translates seamlessly to a screen audio reader without sounding broken."
@@ -175,11 +180,6 @@ export async function POST(req: Request) {
       `${voiceModeInstruction}\n\n` +
       `Context Chunks:\n${retrievedContext}`;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
-      systemInstruction: systemInstruction,
-    });
-
     const parseDelay = (val: any): number | null => {
       if (val === undefined || val === null) return null;
       const str = String(val).trim();
@@ -197,12 +197,27 @@ export async function POST(req: Request) {
       return null;
     };
 
-    // Helper function with retry-after logic for 429 rate limits
-    const generateWithRetry = async (model: any, msg: string, maxAttempts = 5): Promise<string> => {
-      let attempts = 0;
-      while (attempts < maxAttempts) {
+    // Robust generateWithRetry function with fallback model strategy, rate limit retries, and exponential backoff
+    const generateWithRetry = async (
+      genAI: GoogleGenerativeAI,
+      systemInstruction: string,
+      msg: string
+    ): Promise<string> => {
+      const bestModelName = "gemini-2.5-flash";
+      const fallbackModelName = "gemini-2.5-flash-lite";
+      const backoffs = [2000, 4000, 8000]; // wait 2s, 4s, 8s
+      const maxAttempts = backoffs.length + 1; // 4 attempts total
+
+      let attempt = 0;
+
+      while (attempt < maxAttempts) {
+        attempt++;
         try {
-          attempts++;
+          console.log(`[Gemini Handler] Attempt ${attempt}: Generating response using best model (${bestModelName})...`);
+          const model = genAI.getGenerativeModel({
+            model: bestModelName,
+            systemInstruction: systemInstruction,
+          });
           const result = await model.generateContent(msg);
           return result.response.text().trim();
         } catch (err: any) {
@@ -210,8 +225,21 @@ export async function POST(req: Request) {
             err?.status === 429 || 
             String(err).includes("429") || 
             String(err).includes("RESOURCE_EXHAUSTED");
-            
-          if (isRateLimit && attempts < maxAttempts) {
+
+          const isTransient = 
+            err?.status === 503 || 
+            err?.status === 504 || 
+            err?.status === 502 ||
+            String(err).includes("503") || 
+            String(err).includes("504") || 
+            String(err).includes("502") || 
+            String(err).includes("UNAVAILABLE") ||
+            String(err).includes("Service Unavailable") ||
+            String(err).includes("Gateway Timeout") ||
+            String(err).includes("Bad Gateway") ||
+            String(err).toLowerCase().includes("transient");
+
+          if (isRateLimit) {
             let retryDelay = 2000;
             let delayFound = false;
 
@@ -231,7 +259,7 @@ export async function POST(req: Request) {
               }
             }
 
-            // 2. Try to read from err.headers if headers is a plain object
+            // 2. Try to read from err.headers
             if (!delayFound && err?.headers) {
               const headersToTry = ["retryDelay", "retry-after", "Retry-After", "x-retry-delay"];
               for (const headerName of headersToTry) {
@@ -247,7 +275,7 @@ export async function POST(req: Request) {
               }
             }
 
-            // 3. Try to read from err.errorDetails array (from Google SDK)
+            // 3. Try to read from err.errorDetails
             if (!delayFound && Array.isArray(err?.errorDetails)) {
               for (const detail of err.errorDetails) {
                 if (detail && detail.retryDelay) {
@@ -270,24 +298,76 @@ export async function POST(req: Request) {
               }
             }
 
-            console.warn(`429 Rate Limit hit. Retrying in ${retryDelay}ms... (Attempt ${attempts} of ${maxAttempts})`);
+            console.warn(`[Gemini Handler] 429 Rate Limit on best model. Retrying in ${retryDelay}ms... (Attempt ${attempt})`);
             await new Promise((resolve) => setTimeout(resolve, retryDelay));
-          } else {
-            throw err;
+            // Reset attempt counter so we don't exhaust 503 retries
+            attempt--;
+            continue;
           }
+
+          if (isTransient) {
+            console.warn(`[Gemini Handler] Transient error (${err?.status || "503"}) on best model: ${err.message || err}. Immediately switching to fallback model (${fallbackModelName})...`);
+            
+            try {
+              const fallbackModel = genAI.getGenerativeModel({
+                model: fallbackModelName,
+                systemInstruction: systemInstruction,
+              });
+              const result = await fallbackModel.generateContent(msg);
+              console.log(`[Gemini Handler] Success: Fallback model (${fallbackModelName}) generated response successfully.`);
+              return result.response.text().trim();
+            } catch (fallbackErr: any) {
+              console.error(`[Gemini Handler] Fallback model (${fallbackModelName}) also failed: ${fallbackErr.message || fallbackErr}`);
+              
+              const isFallbackRateLimit = 
+                fallbackErr?.status === 429 || 
+                String(fallbackErr).includes("429") || 
+                String(fallbackErr).includes("RESOURCE_EXHAUSTED");
+
+              if (isFallbackRateLimit) {
+                // Short wait and retry fallback
+                console.warn(`[Gemini Handler] 429 Rate Limit on fallback model. Retrying fallback in 2000ms...`);
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                try {
+                  const fallbackModel = genAI.getGenerativeModel({
+                    model: fallbackModelName,
+                    systemInstruction: systemInstruction,
+                  });
+                  const result = await fallbackModel.generateContent(msg);
+                  return result.response.text().trim();
+                } catch (secondFallbackErr) {
+                  console.error(`[Gemini Handler] Second fallback attempt failed:`, secondFallbackErr);
+                }
+              }
+
+              // Both failed, proceed to backoff if we have attempts left
+              if (attempt < maxAttempts) {
+                const backoffDelay = backoffs[attempt - 1];
+                console.warn(`[Gemini Handler] Both models failed on attempt ${attempt}. Waiting ${backoffDelay / 1000}s before retrying...`);
+                await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+                continue;
+              } else {
+                throw new Error("Both best and fallback models failed, and max backoff attempts exceeded.");
+              }
+            }
+          }
+
+          // Non-transient error, throw immediately
+          throw err;
         }
       }
-      throw new Error("Max retry attempts exceeded for rate limit.");
+      throw new Error("Max retry attempts exceeded.");
     };
 
-    const responseText = await generateWithRetry(model, message);
+    const responseText = await generateWithRetry(genAI, systemInstruction, message);
 
     let audioBase64: string | null = null;
-    if (languageMode === "hi" && isVoiceMode) {
+    if ((languageMode === "hi" || languageMode === "regional") && isVoiceMode) {
       try {
-        audioBase64 = await synthesizeHindiSpeech(responseText, speaker);
+        const langCode = languageMode === "regional" ? "ta-IN" : "hi-IN";
+        audioBase64 = await synthesizeHindiSpeech(responseText, speaker, langCode);
       } catch (err) {
-        console.error("Failed to generate Hindi TTS:", err);
+        console.error(`Failed to generate TTS for ${languageMode}:`, err);
       }
     }
 
@@ -295,8 +375,8 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Error in chat API route:", error);
     return NextResponse.json({
-      text: "SYSTEM_DIAGNOSTIC_ERROR: " + (error instanceof Error ? error.message : String(error)),
+      text: "Bunny is catching its breath! Please wait a moment and try again in a minute.",
       audio: null
-    });
+    }, { status: 503 });
   }
 }

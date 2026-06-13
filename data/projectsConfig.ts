@@ -35,7 +35,7 @@ export const projects: Project[] = [
     stack: ["NEXT.JS", "OPENAI", "SUPABASE"], 
     desc: "Autonomous candidate screening platform leveraging structured cognitive evaluation matrices.",
     skills: ["Next.js", "Tailwind CSS", "REACT.js", "Supabase", "AI Automation", "Generative AI", "LLM Orchestration"],
-    image: null,
+    image: "/projectImages/ai-recruiter-portal.png",
     videoUrl: null,
     githubLink: "https://github.com/roshansharma-99/ai-recruiter-portal",
     liveLink: "https://ai-recruiter-portal.vercel.app/"
@@ -55,7 +55,7 @@ export const projects: Project[] = [
     stack: ["EXPERIMENTAL", "WEBGL"], 
     desc: "Undisclosed stealth project bridging cognitive architectures and spatial computing.",
     skills: ["JavaScript / JS", "Next.js", "REACT.js", "Java", "Python", "n8n", "Zapier", "LLM Orchestration", "AI Automation"],
-    image: null,
+    image: "/projectImages/future-venture.png",
     videoUrl: null,
     githubLink: null,
     liveLink: null
