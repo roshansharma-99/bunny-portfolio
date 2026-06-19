@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAudio } from "@/hooks/useAudio";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   sender: "user" | "bot";
@@ -13,9 +14,10 @@ interface Message {
 interface BunnyAIChatProps {
   isOpen: boolean;
   onClose: () => void;
+  onRequestMicPermission?: (onSuccess: () => void) => void;
 }
 
-export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
+export default function BunnyAIChat({ isOpen, onClose, onRequestMicPermission }: BunnyAIChatProps) {
   const { isUnmuted, toggleMute, stopAudio } = useAudio();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [languageMode, setLanguageMode] = useState<"en" | "hi" | "regional">("en");
@@ -536,8 +538,6 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
   // Handle toggling Voice Assistance mode with explicit mic permission request
   const handleVoiceToggle = async () => {
     const nextMode = !isVoiceMode;
-    setIsVoiceMode(nextMode);
-    isVoiceModeRef.current = nextMode; // Sync synchronously to allow immediate greeting audio
 
     // Stop all audio on mode toggle
     if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -555,26 +555,45 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
     setIsAiSpeaking(false);
 
     if (nextMode) {
-      // Request mic permission to trigger browser popup prompt
-      if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach((track) => track.stop());
-        } catch (micError) {
-          console.warn("Microphone access request denied or failed:", micError);
+      if (onRequestMicPermission) {
+        onRequestMicPermission(() => {
+          setIsVoiceMode(true);
+          isVoiceModeRef.current = true;
+          const greeting = languageMode === "hi" ? HI_GREETING : EN_GREETING;
+          setMessages([
+            {
+              sender: "bot",
+              text: `🎙️ ${greeting}`,
+              timestamp: new Date(),
+            },
+          ]);
+          speakText(greeting);
+        });
+      } else {
+        // Request mic permission to trigger browser popup prompt (fallback)
+        if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach((track) => track.stop());
+          } catch (micError) {
+            console.warn("Microphone access request denied or failed:", micError);
+          }
         }
+        setIsVoiceMode(true);
+        isVoiceModeRef.current = true;
+        const greeting = languageMode === "hi" ? HI_GREETING : EN_GREETING;
+        setMessages([
+          {
+            sender: "bot",
+            text: `🎙️ ${greeting}`,
+            timestamp: new Date(),
+          },
+        ]);
+        speakText(greeting);
       }
-
-      const greeting = languageMode === "hi" ? HI_GREETING : EN_GREETING;
-      setMessages([
-        {
-          sender: "bot",
-          text: `🎙️ ${greeting}`,
-          timestamp: new Date(),
-        },
-      ]);
-      speakText(greeting);
     } else {
+      setIsVoiceMode(false);
+      isVoiceModeRef.current = false;
       setMessages([
         {
           sender: "bot",
@@ -1152,9 +1171,8 @@ export default function BunnyAIChat({ isOpen, onClose }: BunnyAIChatProps) {
                             ? "bg-purple-600 text-white rounded-tr-none shadow-[0_4px_15px_rgba(139,92,246,0.2)]"
                             : "bg-zinc-900/90 text-zinc-200 border border-zinc-800/80 rounded-tl-none"
                         }`}
-                        style={{ whiteSpace: "pre-line" }}
                       >
-                        {msg.text}
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
                       </div>
                       <span className="text-[9px] text-zinc-600 mt-1 select-none font-mono">
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

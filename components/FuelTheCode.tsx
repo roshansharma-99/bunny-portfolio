@@ -19,6 +19,7 @@ export default function FuelTheCode() {
   const [copied, setCopied] = useState(false);
   const [pcAlert, setPcAlert] = useState(false);
   const [isQrZoomed, setIsQrZoomed] = useState(false);
+  const [activeLegalTab, setActiveLegalTab] = useState<'privacy' | 'terms' | null>(null);
 
   const upiId = process.env.NEXT_PUBLIC_UPI_ID || "7999784718@ybl";
   const payeeName = process.env.NEXT_PUBLIC_PAYEE_NAME || "Roshan Sharma";
@@ -139,6 +140,28 @@ export default function FuelTheCode() {
               </div>
             </motion.div>
           ))}
+        </div>
+
+        {/* Legal Privacy and Terms Footer */}
+        <div className="w-full max-w-6xl mx-auto mt-20 border-t border-neutral-900 pt-8 pb-12 px-4 text-center font-mono text-[10px] text-neutral-600 tracking-wide">
+          <div className="flex justify-center gap-6 mb-3 text-neutral-500">
+            <button 
+              onClick={() => setActiveLegalTab('privacy')}
+              className="hover:text-neutral-400 cursor-pointer transition-colors bg-transparent border-none p-0 font-mono text-[10px] text-neutral-500 tracking-wide"
+            >
+              📄 PRIVACY DISCLOSURE
+            </button>
+            <span>•</span>
+            <button 
+              onClick={() => setActiveLegalTab('terms')}
+              className="hover:text-neutral-400 cursor-pointer transition-colors bg-transparent border-none p-0 font-mono text-[10px] text-neutral-500 tracking-wide"
+            >
+              ⚖️ TERMS OF COMPLIANCE
+            </button>
+          </div>
+          <p className="max-w-3xl mx-auto leading-relaxed font-sans text-neutral-500/80">
+            Disclaimer: This application functions strictly as an interactive experimental developer workspace. Voice streaming modules leverage browser Web Speech transcription interfaces and client-side ONNX layers directly. Zero telemetry metrics, personal identifiers, or vocal data streams are ever transmitted, collected, or stored on remote external databases. All rights reserved 2026.
+          </p>
         </div>
       </div>
 
@@ -300,6 +323,40 @@ export default function FuelTheCode() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Sleek Legal Tab Modal Overlay */}
+      {activeLegalTab && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[110] flex items-center justify-center p-4 font-mono text-white animate-fadeIn pointer-events-auto">
+          <div className="border border-neutral-800 bg-neutral-950 p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl rounded-2xl relative text-left">
+            <button 
+              onClick={() => setActiveLegalTab(null)}
+              className="absolute top-4 right-4 text-neutral-500 hover:text-white text-sm transition-colors cursor-pointer"
+            >
+              ✕ CLOSE
+            </button>
+            
+            {activeLegalTab === 'privacy' ? (
+              <>
+                <h3 className="text-[#ebd5b3] text-base uppercase tracking-widest mb-4 font-bold">📄 Privacy Disclosure</h3>
+                <div className="font-sans text-xs text-neutral-400 space-y-4 leading-relaxed">
+                  <p><strong>1. Data Minimization Principles:</strong> This portfolio app operates as an experimental serverless terminal space. We prioritize your privacy by enforcing zero client-side tracking configurations.</p>
+                  <p><strong>2. Audio Stream Infrastructure:</strong> Voice commands, audio transcriptions, and localized language models handle telemetry packets strictly within the browser's native client-side memory layout buffer. No recording packets or audio wave structures are ever collected, cached, or transmitted to external data servers.</p>
+                  <p><strong>3. Third-Party Integrations:</strong> API pipelines (such as our Vapi interactive voice endpoints) securely route execution strings over authenticated tokens. No personal identification metrics or browser metadata fields are shared with external dependencies.</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-[#ebd5b3] text-base uppercase tracking-widest mb-4 font-bold">⚖️ Terms of Compliance</h3>
+                <div className="font-sans text-xs text-neutral-400 space-y-4 leading-relaxed">
+                  <p><strong>1. Technical Disclaimer:</strong> All interactive systems, AI chatbot instances, and vocal assistants on this site are presented purely for conceptual showcase purposes as part of Roshan Sharma's personal developer project registry.</p>
+                  <p><strong>2. Usage Quotas & Safe Play:</strong> Users are granted fair-use operational limits to explore our interactive infrastructure pools. Automated traffic spamming, bot attacks, or endpoint manipulation attempts are actively restricted by client-side cooldown safeguards and rate-limiting scripts.</p>
+                  <p><strong>3. Indemnification:</strong> By interacting with this terminal application workspace, visitors agree to indemnify the developer from any structural software issues or API execution limits encountered during runtime exploration passes.</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

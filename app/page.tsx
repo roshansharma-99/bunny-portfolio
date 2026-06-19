@@ -440,77 +440,80 @@ function HomeContent() {
         return;
       }
 
-      setCallStatus("connecting");
-      try {
-        if (!vapiRef.current) {
-          const VapiModule = (await import("@vapi-ai/web")).default;
-          vapiRef.current = new VapiModule("fda07af6-141a-436a-89af-ad89628221ea");
+      setPendingMicCallback(() => async () => {
+        setCallStatus("connecting");
+        try {
+          if (!vapiRef.current) {
+            const VapiModule = (await import("@vapi-ai/web")).default;
+            vapiRef.current = new VapiModule("fda07af6-141a-436a-89af-ad89628221ea");
 
-          vapiRef.current.on("speech-start", () => setIsAgentSpeaking(true));
-          vapiRef.current.on("speech-end", () => setIsAgentSpeaking(false));
+            vapiRef.current.on("speech-start", () => setIsAgentSpeaking(true));
+            vapiRef.current.on("speech-end", () => setIsAgentSpeaking(false));
 
-          vapiRef.current.on("call-start", () => {
-            setCallStatus("active");
-            activateCoolDownTrack("vapi_call");
+            vapiRef.current.on("call-start", () => {
+              setCallStatus("active");
+              activateCoolDownTrack("vapi_call");
 
-            vapiRef.current.on("speech-start", (event: any) => {
-              if (event?.language === "hi" || event?.transcript?.match(/[\u0900-\u097F]/)) {
-                if (!hindiTimerRef.current) {
-                  hindiTimerRef.current = setTimeout(() => {
-                    if (vapiRef.current) {
-                      vapiRef.current.say("Hindi translation engine cooling down. Switching back to standard English channel.");
-                    }
-                    triggerCooldownToast("🌐 Hindi parsing cooling down. Swapping back to English track.");
-                  }, 240000);
+              vapiRef.current.on("speech-start", (event: any) => {
+                if (event?.language === "hi" || event?.transcript?.match(/[\u0900-\u097F]/)) {
+                  if (!hindiTimerRef.current) {
+                    hindiTimerRef.current = setTimeout(() => {
+                      if (vapiRef.current) {
+                        vapiRef.current.say("Hindi translation engine cooling down. Switching back to standard English channel.");
+                      }
+                      triggerCooldownToast("🌐 Hindi parsing cooling down. Swapping back to English track.");
+                    }, 240000);
+                  }
                 }
-              }
+              });
+
+              timeoutRef.current = setTimeout(() => {
+                triggerCooldownToast("🛑 Demonstration limit reached. Line cleared to secure server resources.");
+                if (vapiRef.current) {
+                  vapiRef.current.stop();
+                  vapiRef.current = null;
+                }
+              }, 180000);
             });
 
-            timeoutRef.current = setTimeout(() => {
-              triggerCooldownToast("🛑 Demonstration limit reached. Line cleared to secure server resources.");
-              if (vapiRef.current) {
-                vapiRef.current.stop();
-                vapiRef.current = null;
-              }
-            }, 180000);
-          });
+            vapiRef.current.on("call-end", () => {
+              setCallStatus("idle");
+              setIsMuted(false);
+              setIsAgentSpeaking(false);
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+              if (hindiTimerRef.current) clearTimeout(hindiTimerRef.current);
+              vapiRef.current = null;
+            });
 
-          vapiRef.current.on("call-end", () => {
-            setCallStatus("idle");
-            setIsMuted(false);
-            setIsAgentSpeaking(false);
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            if (hindiTimerRef.current) clearTimeout(hindiTimerRef.current);
-            vapiRef.current = null;
-          });
-
-          vapiRef.current.on("error", (err: any) => {
-            console.error("Vapi Connection Error:", err);
-            setCallStatus("idle");
-            setIsAgentSpeaking(false);
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            if (hindiTimerRef.current) clearTimeout(hindiTimerRef.current);
-            vapiRef.current = null;
-          });
-        }
-
-        setTimeout(async () => {
-          try {
-            if (vapiRef.current) {
-              await vapiRef.current.start("1bb64126-0d24-43f4-9fcc-a4131dc990b9");
-            }
-          } catch (err) {
-            console.error("Initialization failed:", err);
-            setCallStatus("idle");
-            vapiRef.current = null;
+            vapiRef.current.on("error", (err: any) => {
+              console.error("Vapi Connection Error:", err);
+              setCallStatus("idle");
+              setIsAgentSpeaking(false);
+              if (timeoutRef.current) clearTimeout(timeoutRef.current);
+              if (hindiTimerRef.current) clearTimeout(hindiTimerRef.current);
+              vapiRef.current = null;
+            });
           }
-        }, 200);
 
-      } catch (error) {
-        console.error("Lazy load failed:", error);
-        setCallStatus("idle");
-        vapiRef.current = null;
-      }
+          setTimeout(async () => {
+            try {
+              if (vapiRef.current) {
+                await vapiRef.current.start("1bb64126-0d24-43f4-9fcc-a4131dc990b9");
+              }
+            } catch (err) {
+              console.error("Initialization failed:", err);
+              setCallStatus("idle");
+              vapiRef.current = null;
+            }
+          }, 200);
+
+        } catch (error) {
+          console.error("Lazy load failed:", error);
+          setCallStatus("idle");
+          vapiRef.current = null;
+        }
+      });
+      setShowMicPromptModal(true);
     }
   };
 
@@ -528,6 +531,8 @@ function HomeContent() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showUnmuteOverlay, setShowUnmuteOverlay] = useState(false);
+  const [showMicPromptModal, setShowMicPromptModal] = useState(false);
+  const [pendingMicCallback, setPendingMicCallback] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     let currentProgress = 0;
@@ -551,24 +556,38 @@ function HomeContent() {
     // 1. Fire your original working ambient audio loop track playback here
     unmuteAndStart();
 
-    // 2. Proactively secure browser hardware microphone permissions early
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        console.log("// System Request: Priming local device audio inputs...");
-        const temporaryStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        // Immediately release the hardware track right away so the mic isn't actively broadcasting
-        temporaryStream.getTracks().forEach(track => track.stop());
-        console.log("// System Registry: Microphone permission cached successfully.");
-      } catch (micError) {
-        // Log gracefully if the user declines, ensuring it doesn't crash the page mount lifecycle
-        console.warn("User deferred mic stream authorization routing:", micError);
-      }
-    }
-
-    // 3. Clear the welcome overlay modal state from the active canvas
+    // 2. Clear the welcome overlay modal state from the active canvas
     setShowUnmuteOverlay(false);
     setIsStarted(true);
+  };
+
+  const handleConfirmMicPermission = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        console.log("// System Request: Requesting local hardware access...");
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Immediately release the hardware track right away so the mic isn't actively broadcasting
+        stream.getTracks().forEach(track => track.stop());
+        console.log("// System Registry: Microphone permission approved.");
+        
+        // Execute the pending action
+        if (pendingMicCallback) {
+          pendingMicCallback();
+        }
+      } catch (micError) {
+        console.warn("Microphone access request denied or failed:", micError);
+        triggerCooldownToast("⚠️ Microphone permission is required to activate voice channels.");
+      }
+    } else {
+      triggerCooldownToast("⚠️ Audio input hardware is not supported on this browser.");
+    }
+    setShowMicPromptModal(false);
+    setPendingMicCallback(null);
+  };
+
+  const handleCancelMicPermission = () => {
+    setShowMicPromptModal(false);
+    setPendingMicCallback(null);
   };
 
   const [isStarted, setIsStarted] = useState(false);
@@ -1734,7 +1753,70 @@ function HomeContent() {
       </AnimatePresence>
 
       {/* Bunny AI Chat Component */}
-      <BunnyAIChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <BunnyAIChat 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        onRequestMicPermission={(onSuccess) => {
+          setPendingMicCallback(() => onSuccess);
+          setShowMicPromptModal(true);
+        }}
+      />
+
+      {/* Gold-Rimmed Hardware Safety Modal */}
+      <AnimatePresence>
+        {showMicPromptModal && (
+          <motion.div
+            key="mic-safety-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 backdrop-blur-xl pointer-events-auto"
+          >
+            <div className="absolute w-[500px] h-[500px] bg-[#c5a880]/5 rounded-full blur-[120px] pointer-events-none" />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
+              className="relative max-w-md w-full bg-neutral-950/90 border border-[#c5a880]/50 p-8 rounded-3xl shadow-[0_0_50px_rgba(197,168,128,0.2)] text-center flex flex-col items-center space-y-6 overflow-hidden"
+            >
+              {/* Dynamic Glow Spotlight */}
+              <div className="absolute top-0 right-0 w-[150px] h-[150px] bg-[#c5a880]/5 rounded-full blur-[60px] pointer-events-none" />
+
+              <div className="w-16 h-16 rounded-full bg-[#c5a880]/10 border border-[#c5a880]/30 flex items-center justify-center shadow-[0_0_15px_rgba(197,168,128,0.15)]">
+                <span className="text-2xl">🎙️</span>
+              </div>
+
+              <div className="space-y-3">
+                <span className="text-[10px] font-mono text-[#c5a880] uppercase tracking-widest block">// Hardware Safety Channel</span>
+                <h3 className="text-xl font-bold text-white tracking-wide">Microphone Activation Consent</h3>
+                <p className="text-xs text-zinc-400 font-light leading-relaxed max-w-sm">
+                  Roshan Sharma's portfolio requests microphone access for real-time voice streaming modules. 
+                  Zero vocal data is collected, stored, or processed on external remote databases. 
+                  All audio processing happens strictly in the browser runtime.
+                </p>
+              </div>
+
+              <div className="w-full flex flex-col gap-3 pt-2">
+                <button
+                  onClick={handleConfirmMicPermission}
+                  className="w-full py-3.5 bg-gradient-to-r from-[#c5a880] to-[#ebd5b3] hover:from-[#b09670] hover:to-[#ebd5b3] text-neutral-950 font-bold text-xs uppercase tracking-widest transition-all duration-300 rounded-xl shadow-[0_0_20px_rgba(197,168,128,0.25)] hover:shadow-[0_0_30px_rgba(197,168,128,0.4)] cursor-pointer"
+                >
+                  CONFIRM & AUTHORIZE CHANNEL
+                </button>
+                <button
+                  onClick={handleCancelMicPermission}
+                  className="w-full py-3 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xxs font-bold uppercase tracking-widest border border-zinc-800 transition-all cursor-pointer"
+                >
+                  DECLINE ACCESS
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Luxury Voice Interface HUD Overlay */}
       {callStatus !== "idle" && (
