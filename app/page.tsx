@@ -197,7 +197,177 @@ function HomeContent() {
   const timeoutRef = useRef<any>(null);
   const [callStatus, setCallStatus] = useState<"idle" | "connecting" | "active">("idle");
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isVapiMuted, setIsVapiMuted] = useState(false);
+
+  const [isMuted, setIsMuted] = useState(true);
+  const [playedSections, setPlayedSections] = useState<Record<string, boolean>>({});
+  const [activeSectionId, setActiveSectionId] = useState<string>('hero');
+  const globalAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [hasVisitedOnboarding, setHasVisitedOnboarding] = useState(false);
+
+  const audioSourceFiles: Record<string, string> = {
+    hero: '/audio/Intro-greet01.mp3',
+    projects: '/audio/roshan-project 02.mp3',
+    skills: '/audio/project-03.mp3',
+    fuel: '/audio/project-end-4.mp3'
+  };
+
+  const playSectionTrack = (sectionId: string, forcePlayEvenIfPlayed = false) => {
+    setActiveSectionId(sectionId);
+
+    // 1. Wipe out any ghost audio instance playing right now completely
+    if (globalAudioRef.current) {
+      globalAudioRef.current.pause();
+      globalAudioRef.current.src = "";
+      globalAudioRef.current = null;
+    }
+
+    // 2. IF user is muted, STOP immediately. Do NOT register the section as played yet.
+    if (isMuted) return;
+
+    // 3. IF section already played and we aren't overriding it, block it.
+    if (playedSections[sectionId] && !forcePlayEvenIfPlayed) return;
+
+    const trackPath = audioSourceFiles[sectionId];
+    if (!trackPath) return;
+
+    // 4. Initialize clean audio worker instance
+    const audioNode = new Audio(trackPath);
+    audioNode.onerror = () => {
+      console.warn(`Audio resource at ${trackPath} could not be loaded by the browser.`);
+    };
+    audioNode.preload = 'auto';
+    globalAudioRef.current = audioNode;
+
+    audioNode.play()
+      .then(() => {
+        // As soon as it starts playing, consume the 1-play token forever
+        setPlayedSections(prev => ({ ...prev, [sectionId]: true }));
+      })
+      .catch(err => console.log("Audio play request caught or deferred:", err));
+
+    // Cleanup token hook when file finishes playing natively
+    audioNode.onended = () => {
+      if (globalAudioRef.current === audioNode) {
+        globalAudioRef.current = null;
+      }
+    };
+  };
+
+  const playSectionTrackRef = useRef(playSectionTrack);
+
+  // --- Synchronous Audio Handlers ---
+  const handleBeginVoiceJourney = () => {
+    // 1. Force state mapping
+    setIsMuted(false);
+    setHasVisitedOnboarding(true);
+
+    // 2. Build the audio track synchronously inside user gesture
+    const initialTrackPath = audioSourceFiles['hero'];
+    if (initialTrackPath) {
+      const audioNode = new Audio(initialTrackPath);
+      audioNode.onerror = () => {
+        console.warn(`Audio resource at ${initialTrackPath} could not be loaded by the browser.`);
+      };
+      audioNode.preload = 'auto';
+      // 3. Cache to global ref
+      globalAudioRef.current = audioNode;
+      // 4. Register play token
+      setPlayedSections(prev => ({ ...prev, hero: true }));
+      // 5. Play immediately
+      audioNode.play().catch(err => {
+        console.error('Autoplay bypass intercept failed. Falling back to interaction query.', err);
+      });
+    }
+
+    // close overlay and start tour
+    setShowUnmuteOverlay(false);
+    setIsStarted(true);
+  };
+
+  const handleSkipTour = () => {
+    setIsMuted(true);
+    setHasVisitedOnboarding(true);
+    // wipe any existing audio
+    if (globalAudioRef.current) {
+      globalAudioRef.current.pause();
+      globalAudioRef.current = null;
+    }
+    setShowUnmuteOverlay(false);
+    setIsStarted(true);
+  };
+
+  const handleHeaderMuteToggle = () => {
+    const nextMuteState = !isMuted;
+    setIsMuted(nextMuteState);
+
+    if (!nextMuteState) {
+      // UNMUTING: initialize current section audio synchronously if not already played
+      if (!playedSections[activeSectionId]) {
+        const trackPath = audioSourceFiles[activeSectionId];
+        if (trackPath) {
+          const audioNode = new Audio(trackPath);
+          audioNode.onerror = () => {
+            console.warn(`Audio resource at ${trackPath} could not be loaded by the browser.`);
+          };
+          audioNode.preload = 'auto';
+          globalAudioRef.current = audioNode;
+          setPlayedSections(prev => ({ ...prev, [activeSectionId]: true }));
+          audioNode.play().catch(e => console.log('Header sync trigger failed:', e));
+        }
+      }
+    } else {
+      // MUTING: stop any playing audio
+      if (globalAudioRef.current) {
+        globalAudioRef.current.pause();
+      }
+    }
+  };
+  useEffect(() => {
+    playSectionTrackRef.current = playSectionTrack;
+  }, [playSectionTrack]);
+
+  const playedSectionsRef = useRef(playedSections);
+  const activeSectionIdRef = useRef(activeSectionId);
+  useEffect(() => {
+    playedSectionsRef.current = playedSections;
+  }, [playedSections]);
+  useEffect(() => {
+    activeSectionIdRef.current = activeSectionId;
+  }, [activeSectionId]);
+
+  // Whenever the user clicks the global Header Unmute button, react immediately to the current layout section context
+  useEffect(() => {
+    if (!isMuted) {
+      // User unmuted manually! Check if current section has been consumed. If not, play it now.
+      if (!playedSectionsRef.current[activeSectionIdRef.current]) {
+        playSectionTrack(activeSectionIdRef.current, true);
+      }
+    } else {
+      // User muted manually! Stop whatever track is playing right now.
+      if (globalAudioRef.current) {
+        globalAudioRef.current.pause();
+      }
+    }
+
+    // Sync with global AudioProvider if needed
+    if (!isMuted && !isUnmuted) {
+      toggleMute();
+    } else if (isMuted && isUnmuted) {
+      toggleMute();
+    }
+  }, [isMuted]);
+
+  const handleSectionIntersection = (sectionId: string) => {
+    if (sectionId !== activeSectionId) {
+      playSectionTrack(sectionId, false);
+    }
+  };
+
+  const handleSectionIntersectionRef = useRef(handleSectionIntersection);
+  useEffect(() => {
+    handleSectionIntersectionRef.current = handleSectionIntersection;
+  }, [handleSectionIntersection]);
 
   // ElevenLabs continuous speech states and refs
   const [tourMode, setTourMode] = useState<"voice-tour" | "agent-tour">("voice-tour");
@@ -478,7 +648,7 @@ function HomeContent() {
 
             vapiRef.current.on("call-end", () => {
               setCallStatus("idle");
-              setIsMuted(false);
+              setIsVapiMuted(false);
               setIsAgentSpeaking(false);
               if (timeoutRef.current) clearTimeout(timeoutRef.current);
               if (hindiTimerRef.current) clearTimeout(hindiTimerRef.current);
@@ -672,12 +842,14 @@ function HomeContent() {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const className = entry.target.className;
-          if (className.includes("project-section")) {
-            playAudio("projects");
-          } else if (className.includes("contact-section")) {
-            playAudio("contact");
+          if (className.includes("hero-section")) {
+            handleSectionIntersectionRef.current("hero");
+          } else if (className.includes("project-section")) {
+            handleSectionIntersectionRef.current("projects");
+          } else if (className.includes("skills-section")) {
+            handleSectionIntersectionRef.current("skills");
           } else if (className.includes("fuel-section")) {
-            playAudio("fuel");
+            handleSectionIntersectionRef.current("fuel");
           }
         }
       });
@@ -685,18 +857,20 @@ function HomeContent() {
 
     const observer = new IntersectionObserver(observerCallback, observerOptions);
 
+    const heroEl = document.querySelector(".hero-section");
     const projectEl = document.querySelector(".project-section");
-    const contactEl = document.querySelector(".contact-section");
+    const skillsEl = document.querySelector(".skills-section");
     const fuelEl = document.querySelector(".fuel-section");
 
+    if (heroEl) observer.observe(heroEl);
     if (projectEl) observer.observe(projectEl);
-    if (contactEl) observer.observe(contactEl);
+    if (skillsEl) observer.observe(skillsEl);
     if (fuelEl) observer.observe(fuelEl);
 
     return () => {
       observer.disconnect();
     };
-  }, [isStarted, playAudio]);
+  }, [isStarted]);
 
 
 
@@ -824,20 +998,22 @@ function HomeContent() {
             <div className="flex items-center gap-3 pl-2 border-l border-white/10 shrink-0">
               <div className="flex items-center gap-3">
                 
-                {/* Stable Layout Activation Key */}
-                <button 
-                  onClick={handleToggleAmbientMusic}
-                  className="text-xs font-mono text-[#c5a880] tracking-widest uppercase hover:text-white transition-colors"
+                <button
+                  onClick={handleHeaderMuteToggle}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border font-mono text-[10px] tracking-widest font-bold uppercase transition-all duration-300 cursor-pointer ${
+                    !isMuted 
+                      ? 'bg-violet-950/40 text-violet-400 border-violet-500/40 shadow-[0_0_15px_rgba(139,92,246,0.2)]' 
+                      : 'bg-neutral-950 text-neutral-500 border-neutral-800'
+                  }`}
                 >
-                  {isAmbientPlaying ? "🔊 Mute Track" : "🔈 Unmute Track"}
+                  <span className="relative flex h-2 w-2">
+                    {!isMuted && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                    )}
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${!isMuted ? 'bg-violet-500' : 'bg-neutral-600'}`}></span>
+                  </span>
+                  {!isMuted ? 'Matrix Voice Live' : 'Audio Matrix Deactivated'}
                 </button>
-
-                {/* Light, Stable CSS-Driven Visualizer Pulses */}
-                <div className="flex items-end gap-0.5 h-3 pl-1">
-                  <span className={`w-0.5 bg-[#c5a880] rounded-full transition-all duration-300 ${isAmbientPlaying ? "h-3 animate-pulse" : "h-1"}`} />
-                  <span className={`w-0.5 bg-[#c5a880] rounded-full transition-all duration-300 ${isAmbientPlaying ? "h-2 animate-pulse delay-75" : "h-1"}`} />
-                  <span className={`w-0.5 bg-[#c5a880] rounded-full transition-all duration-300 ${isAmbientPlaying ? "h-2.5 animate-pulse delay-150" : "h-1"}`} />
-                </div>
 
               </div>
             </div>
@@ -1368,7 +1544,7 @@ function HomeContent() {
             </div>
 
             {/* RIGHT PANEL - Animated Glowing Skills Container (lg:col-span-5) */}
-            <div className="lg:col-span-5 w-full lg:sticky lg:top-28 flex flex-col pointer-events-auto space-y-6">
+            <div className="lg:col-span-5 w-full lg:sticky lg:top-28 flex flex-col pointer-events-auto space-y-6 skills-section">
               <h2 className="text-3xl font-extrabold tracking-wider text-white uppercase font-sans lg:hidden text-left">
                 TECH STACK & CORE SKILLS
               </h2>
@@ -1701,7 +1877,7 @@ function HomeContent() {
 
       {/* Prominent Unmute Notification Overlay */}
       <AnimatePresence>
-        {showUnmuteOverlay && (
+        {showUnmuteOverlay && !hasVisitedOnboarding && (
           <motion.div
             key="unmute-overlay"
             initial={{ opacity: 0 }}
@@ -1741,12 +1917,20 @@ function HomeContent() {
                 </p>
               </div>
 
-              <button 
-                onClick={handleInitializeVoiceExperience}
-                className="w-full py-4 bg-[#8b5cf6] hover:bg-[#a78bfa] text-white font-bold text-xs uppercase tracking-widest transition-all duration-300 rounded-xl"
-              >
-                UNMUTE & BEGIN EXPERIENCE
-              </button>
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md mx-auto">
+                <button
+                  onClick={handleBeginVoiceJourney}
+                  className="flex-1 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-mono text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-[1.02] cursor-pointer"
+                >
+                  🎙️ Begin Voice Journey
+                </button>
+                <button
+                  onClick={handleSkipTour}
+                  className="flex-1 py-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 font-mono text-xs font-bold uppercase tracking-widest rounded-xl transition-all cursor-pointer"
+                >
+                  Skip to Normal Tour
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -1849,15 +2033,15 @@ function HomeContent() {
             <div className="space-y-3">
               <button 
                 onClick={() => { 
-                  const m = !isMuted; 
+                  const m = !isVapiMuted; 
                   if (vapiRef.current) {
                     vapiRef.current.setMuted(m); 
                   }
-                  setIsMuted(m); 
+                  setIsVapiMuted(m); 
                 }}
                 className="w-full py-2.5 border border-neutral-900 hover:border-neutral-800 text-neutral-500 hover:text-[#ebd5b3] font-mono text-[9px] uppercase tracking-widest transition-all cursor-pointer"
               >
-                {isMuted ? "🔊 Unmute Device Input" : "🎙️ Mute Device Input"}
+                {isVapiMuted ? "🔊 Unmute Device Input" : "🎙️ Mute Device Input"}
               </button>
               <button 
                 onClick={handleToggleVoiceCall}

@@ -212,7 +212,7 @@ export default function ActivityPage() {
             </div>
 
             <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-4 relative z-10">
-              <a href="/Walkover_Certificate.pdf" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-6 py-3.5 bg-[#c5a880]/10 hover:bg-[#c5a880]/20 border border-[#c5a880]/40 font-mono text-[#ebd5b3] hover:text-white text-xs tracking-widest uppercase transition-all duration-300 shadow-md">SEND TO VERIFICATION ROUTE ↗</a>
+              <a href="/new-walkover.png" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-6 py-3.5 bg-[#c5a880]/10 hover:bg-[#c5a880]/20 border border-[#c5a880]/40 font-mono text-[#ebd5b3] hover:text-white text-xs tracking-widest uppercase transition-all duration-300 shadow-md">SEND TO VERIFICATION ROUTE ↗</a>
             </div>
             
             <div className="text-[10px] text-neutral-600 font-medium uppercase tracking-wider relative z-10">
